@@ -1,8 +1,6 @@
 import formidable from 'formidable';
-import fs from 'fs';
+import fs from 'fs/promises';
 import { OpenAI } from 'openai';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export const config = {
   api: {
@@ -10,25 +8,41 @@ export const config = {
   },
 };
 
-export default async (req, res) => {
-  const form = new formidable.IncomingForm();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Only POST method is allowed' });
+  }
+
+  const form = formidable({ multiples: false });
 
   form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(500).json({ error: 'Upload failed' });
+    if (err) {
+      console.error('Formidable error:', err);
+      return res.status(500).json({ error: 'File upload failed' });
+    }
 
-    const filePath = files.plan.filepath;
-    const fileData = fs.readFileSync(filePath);
-    const base64PDF = fileData.toString('base64');
+    try {
+      const file = files.plan;
+      const fileBuffer = await fs.readFile(file.filepath);
+      const base64PDF = fileBuffer.toString('base64');
 
-    const gptResponse = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: 'You are an estimator reading electrical plans.' },
-        { role: 'user', content: 'Here is a base64-encoded PDF. Extract the electrical material list.' },
-        { role: 'user', content: base64PDF }
-      ]
-    });
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: 'You are an estimator reading electrical plans.' },
+          { role: 'user', content: 'Here is a base64-encoded PDF. Extract the electrical material list.' },
+          { role: 'user', content: base64PDF },
+        ],
+      });
 
-    res.status(200).json({ materialList: gptResponse.choices[0].message.content });
+      const materialList = response.choices[0].message.content;
+      res.status(200).json({ materialList });
+
+    } catch (error) {
+      console.error('OpenAI error:', error);
+      res.status(500).json({ error: 'AI processing failed' });
+    }
   });
-};
+}
