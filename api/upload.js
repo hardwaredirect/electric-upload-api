@@ -1,3 +1,6 @@
+console.log('🔌 Upload endpoint received a request');
+
+
 console.log('📦 Upload function triggered');
 
 
