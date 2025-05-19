@@ -1,8 +1,14 @@
 {
+  "version": 2,
   "functions": {
     "api/upload.js": {
-      "memory": 512,
-      "maxDuration": 10
+      "runtime": "nodejs18.x"
     }
-  }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1.js"
+    }
+  ]
 }
