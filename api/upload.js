@@ -1,6 +1,5 @@
 import formidable from 'formidable';
 import fs from 'fs/promises';
-import { OpenAI } from 'openai';
 
 export const config = {
   api: {
@@ -8,19 +7,17 @@ export const config = {
   },
 };
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Only POST method is allowed' });
+    return res.status(405).json({ error: 'Only POST allowed' });
   }
 
   const form = formidable({ multiples: false });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error('Formidable error:', err);
-      return res.status(500).json({ error: 'File upload failed' });
+      console.error('Form parse error:', err);
+      return res.status(500).json({ error: 'File parsing failed' });
     }
 
     try {
@@ -28,21 +25,25 @@ export default async function handler(req, res) {
       const fileBuffer = await fs.readFile(file.filepath);
       const base64PDF = fileBuffer.toString('base64');
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'You are an estimator reading electrical plans.' },
-          { role: 'user', content: 'Here is a base64-encoded PDF. Extract the electrical material list.' },
-          { role: 'user', content: base64PDF },
-        ],
+      // 🔁 Make the external API call from the backend (no CORS issues)
+      const aitopiaRes = await fetch('https://extensions.aitopia.ai/ai/prompts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.AITOPIA_API_KEY}`  // Set in Vercel environment
+        },
+        body: JSON.stringify({
+          prompt: 'Extract an electrical material list from this PDF.',
+          input: base64PDF
+        })
       });
 
-      const materialList = response.choices[0].message.content;
-      res.status(200).json({ materialList });
+      const aitopiaData = await aitopiaRes.json();
 
-    } catch (error) {
-      console.error('OpenAI error:', error);
-      res.status(500).json({ error: 'AI processing failed' });
+      res.status(200).json({ materialList: aitopiaData });
+    } catch (e) {
+      console.error('Processing error:', e);
+      res.status(500).json({ error: 'Processing failed' });
     }
   });
 }
