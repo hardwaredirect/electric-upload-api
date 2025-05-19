@@ -21,16 +21,19 @@ export default async function handler(req, res) {
     }
 
     try {
+      if (!files.plan) {
+        console.error('No plan file received');
+        return res.status(400).json({ error: 'No file uploaded as "plan"' });
+      }
+
       const file = files.plan;
       const fileBuffer = await fs.readFile(file.filepath);
       const base64PDF = fileBuffer.toString('base64');
 
       console.log('PDF received and converted to base64');
 
-      // 🧠 Test call — replace this with your OpenAI/Aitopia call
       const materialList = `You uploaded a file named: ${file.originalFilename}`;
 
-      // ✅ Return fake data to verify system works
       return res.status(200).json({ materialList });
     } catch (e) {
       console.error('Upload handler error:', e);
